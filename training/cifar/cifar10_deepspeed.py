@@ -1,6 +1,7 @@
 import argparse
 
 import deepspeed
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -278,7 +279,7 @@ def test(model_engine, testset, local_device, target_dtype, test_batch_size=4):
 
 def main(args):
     # Initialize DeepSpeed distributed backend.
-    deepspeed.init_distributed()
+    deepspeed.init_distributed(dist_backend='ucc')
 
     ########################################################################
     # Step1. Data Preparation.
@@ -360,7 +361,8 @@ def main(args):
     # We simply have to loop over our data iterator, and feed the inputs to the
     # network and optimize. (DeepSpeed handles the distributed details for us!)
     ########################################################################
-
+    training_total_time = 0
+    training_start = time.time()
     for epoch in range(args.epochs):  # loop over the dataset multiple times
         running_loss = 0.0
         for i, data in enumerate(trainloader):
@@ -387,7 +389,10 @@ def main(args):
                 )
                 running_loss = 0.0
     print("Finished Training")
-
+    training_end = time.time()
+    training_total_time = training_end - training_start
+    if torch.distributed.get_rank() == 0:
+        print("Finished Training, time: " + str(training_total_time))
     ########################################################################
     # Step 4. Test the network on the test data.
     ########################################################################
